@@ -1,0 +1,24 @@
+[project]
+name = "nwb-builder"
+version = "0.1.0"
+description = "Build NWB files from SpikeInterface analyzer + behavioral CSV + probe anatomy"
+requires-python = ">=3.11"
+dependencies = [
+    "pynwb>=3.1.1",
+    "spikeinterface[core,postprocessing,qualitymetrics]>=0.104.0",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "h5py>=3.11",
+    "scipy>=1.12",
+    "neo>=0.13",          # required by spikeinterface spikeglx reader
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipython>=8.0",
+    "jupyterlab>=4.0",
+    "matplotlib>=3.8",
+]
+
+[tool.uv]
+package = false
