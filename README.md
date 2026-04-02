@@ -1,2 +1,2 @@
 # NWB_generator_example
-Example Matlab script used to generate NWB files. 
+Example Matlab and Python scripts used to generate NWB files. 
