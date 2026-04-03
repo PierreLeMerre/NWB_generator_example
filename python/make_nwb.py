@@ -298,10 +298,26 @@ metrics_df = metrics_ext.get_data()
 templates_ext = analyzer.get_extension("templates")
 if templates_ext is None:
     raise RuntimeError("templates extension not found. Run compute_waveforms() first.")
-templates = templates_ext.get_templates()
+
+# get_templates() without operator returns the default (usually "average").
+# Try "average" explicitly first, fall back to default if not available.
+try:
+    templates = templates_ext.get_templates(operator="average")
+    print("  Template operator: average")
+except Exception:
+    templates = templates_ext.get_templates()
+    print("  Template operator: default (average not explicitly available)")
+
+if templates is None or np.all(templates == 0):
+    raise RuntimeError(
+        "Templates array is None or all zeros. "
+        "Re-run: analyzer.compute('templates', operators=['average'])"
+    )
+
 _, n_template_samples, n_template_channels = templates.shape
 print(f"  Templates: {templates.shape} "
       f"({n_template_samples} samples x {n_template_channels} channels)")
+print(f"  Value range: [{templates.min():.2f}, {templates.max():.2f}] uV")
 
 # --- Declare unit columns ---
 if nwbfile.units is not None:
@@ -324,8 +340,8 @@ for si_col, (nwb_col, desc) in METRIC_COL_MAP.items():
 nwbfile.add_unit_column(
     name="waveform_mean",
     description=(
-        f"Mean waveform template ({n_template_samples} samples x "
-        f"{n_template_channels} channels), uV, sampled at {fs} Hz"
+        f"Mean waveform at the peak channel ({n_template_samples} samples), "
+        f"uV, sampled at {fs} Hz"
     ),
     index=False,
 )
@@ -357,13 +373,20 @@ for uid in unit_ids:
     spike_times_s = samples_to_seconds(spike_samples)
     total_spikes += len(spike_samples)
 
-    tmpl_idx = all_unit_id_list.index(uid)
-    template = templates[tmpl_idx]
-    peak_ch  = int(np.argmax(np.ptp(template, axis=0)))
+    # Index into the full template array using the unit's position
+    # in the original (unfiltered) unit list -- not the good-only list
+    tmpl_idx  = all_unit_id_list.index(uid)
+    template  = templates[tmpl_idx]              # (n_samples, n_channels)
+    peak_ch   = int(np.argmax(np.ptp(template, axis=0)))
+    waveform  = template[:, peak_ch]             # (n_samples,) at peak channel
+
+    # Sanity check: warn if this unit's waveform looks flat
+    if np.max(np.abs(waveform)) < 1e-6:
+        print(f"  Warning: unit {uid_int} waveform appears to be all zeros")
 
     row_kwargs = dict(
         spike_times     = spike_times_s,
-        waveform_mean   = template,
+        waveform_mean   = waveform,
         peak_channel_id = peak_ch,
     )
     for si_col, (nwb_col, _) in METRIC_COL_MAP.items():
@@ -687,4 +710,3 @@ print(f"    LFP         : shape={lfp_shape}, "
       f"rate={fs_raw / decimate_factor:.0f} Hz, "
       f"compression={compression} level {compress_opts}")
 print(f"\nAll done -- NWB file ready at {output_path}")
-# %%
