@@ -128,7 +128,7 @@ def _pair_transitions(signal: np.ndarray):
     return ups[:n], downs[:n]
 
 
-def _safe_float(val, default: float = -1.0) -> float:
+def _safe_float(val, default: float = np.nan) -> float:
     try:
         v = float(val)
         return v if np.isfinite(v) else default
@@ -675,7 +675,7 @@ def _first_event_in_window(event_idx_arr, ts, t_start, t_stop):
     t_events = ts[event_idx_arr]
     mask = (t_events >= t_start) & (t_events <= t_stop)
     hits = t_events[mask]
-    return float(hits[0]) if len(hits) > 0 else -1.0
+    return float(hits[0]) if len(hits) > 0 else np.nan
 
 # Distractor trial numbers (1-based) -> set of 0-based trial indices
 distractor_set = set((s_isdistr - 1).tolist())
@@ -684,11 +684,11 @@ distractor_set = set((s_isdistr - 1).tolist())
 nwbfile.add_trial_column("trial_number",       "Trial number (1-indexed)")
 nwbfile.add_trial_column("rewarded",           "Animal reached goal area and received reward (bool)")
 nwbfile.add_trial_column("distractor",         "Distractor dot was shown during this trial (bool)")
-nwbfile.add_trial_column("area_entry_time",    "Time of first goal-area entry (s); -1 if none")
-nwbfile.add_trial_column("area_exit_time",     "Time of first goal-area exit after entry (s); -1 if none")
-nwbfile.add_trial_column("reward_time",        "Time of reward onset (s); -1 if not rewarded")
-nwbfile.add_trial_column("reward_off_time",    "Time of reward offset (s); -1 if not rewarded")
-nwbfile.add_trial_column("first_move_time",    "Time of first treadmill movement in trial (s); -1 if none")
+nwbfile.add_trial_column("area_entry_time",    "Time of first goal-area entry (s); NaN if animal never entered")
+nwbfile.add_trial_column("area_exit_time",     "Time of first goal-area exit after entry (s); NaN if no exit recorded")
+nwbfile.add_trial_column("reward_time",        "Time of reward onset (s); NaN if trial not rewarded")
+nwbfile.add_trial_column("reward_off_time",    "Time of reward offset (s); NaN if trial not rewarded")
+nwbfile.add_trial_column("first_move_time",    "Time of first treadmill movement in trial (s); NaN if no movement detected")
 
 # Derive first_move from ang_speed > 0 within each trial
 # ang_speed is at Arduino rate (100 Hz), synchronized via ts_a_seconds
@@ -698,26 +698,26 @@ for trial_idx in range(n_trials):
     t_stop  = float(ts_p[trial_stop_idx[trial_idx]])
 
     area_in  = _first_event_in_window(area_enter_idx, ts_p, t_start, t_stop)
-    area_out = -1.0
+    area_out = np.nan
     if area_in > 0:
         # Look for the first exit after the entry
         t_exits = ts_p[area_exit_idx]
         mask_out = t_exits > area_in
-        area_out = float(t_exits[mask_out][0]) if mask_out.any() else -1.0
+        area_out = float(t_exits[mask_out][0]) if mask_out.any() else np.nan
 
     rew_on  = _first_event_in_window(rew_start_idx, ts_p, t_start, t_stop)
-    rew_off = -1.0
+    rew_off = np.nan
     if rew_on > 0:
         t_roff = ts_p[rew_stop_idx]
         mask_roff = t_roff > rew_on
-        rew_off = float(t_roff[mask_roff][0]) if mask_roff.any() else -1.0
+        rew_off = float(t_roff[mask_roff][0]) if mask_roff.any() else np.nan
 
     # First movement: first Arduino sample inside trial with ang_speed > 0
     mask_a = (ts_a_seconds >= t_start) & (ts_a_seconds <= t_stop)
     spd_in_trial = ang_speed[mask_a]
     ts_a_in_trial = ts_a_seconds[mask_a]
     moving = ts_a_in_trial[spd_in_trial > 0]
-    first_move = float(moving[0]) if len(moving) > 0 else -1.0
+    first_move = float(moving[0]) if len(moving) > 0 else np.nan
 
     nwbfile.add_trial(
         start_time      = t_start,
