@@ -16,7 +16,7 @@ Usage
 Edit SESSION_CONFIG at the top before running.
 """
 
-# %%============================================================
+# ============================================================
 # IMPORTS
 # ============================================================
 import json
@@ -345,10 +345,10 @@ nwbfile.add_unit_column(
     ),
     index=False,
 )
-nwbfile.add_unit_column(
-    name="peak_channel_id",
-    description="Channel index with the largest peak-to-peak template amplitude",
-)
+# electrodes is the standard NWB DynamicTableRegion linking each unit
+# to the electrode table row of its peak channel.
+# For a single probe the electrode table starts at row 0, so
+# abs_electrode_row = peak_ch_si (the SpikeInterface channel index).
 if curation_quality:
     nwbfile.add_unit_column("quality",      "Manual quality label from curation.json (good / MUA / noise)")
 if passing_qc:
@@ -375,19 +375,28 @@ for uid in unit_ids:
 
     # Index into the full template array using the unit's position
     # in the original (unfiltered) unit list -- not the good-only list
-    tmpl_idx  = all_unit_id_list.index(uid)
-    template  = templates[tmpl_idx]              # (n_samples, n_channels)
-    peak_ch   = int(np.argmax(np.ptp(template, axis=0)))
-    waveform  = template[:, peak_ch]             # (n_samples,) at peak channel
+    tmpl_idx   = all_unit_id_list.index(uid)
+    template   = templates[tmpl_idx]              # (n_samples, n_channels)
+    peak_ch_si = int(np.argmax(np.ptp(template, axis=0)))
+    waveform   = template[:, peak_ch_si]          # (n_samples,) at peak channel
 
-    # Sanity check: warn if this unit's waveform looks flat
     if np.max(np.abs(waveform)) < 1e-6:
         print(f"  Warning: unit {uid_int} waveform appears to be all zeros")
 
+    # Absolute electrode table row for this unit's peak channel.
+    # Single probe -> table starts at row 0, so abs row = SI channel index.
+    peak_electrode_region = nwbfile.create_electrode_table_region(
+        region=[peak_ch_si],
+        description=(
+            f"Peak electrode for unit {uid_int} "
+            f"(electrode table row {peak_ch_si})"
+        ),
+    )
+
     row_kwargs = dict(
-        spike_times     = spike_times_s,
-        waveform_mean   = waveform,
-        peak_channel_id = peak_ch,
+        spike_times   = spike_times_s,
+        electrodes    = peak_electrode_region,
+        waveform_mean = waveform,
     )
     for si_col, (nwb_col, _) in METRIC_COL_MAP.items():
         if si_col in metrics_df.columns:
@@ -702,9 +711,15 @@ with NWBHDF5IO(output_path, mode="r") as io:
     blocks  = set(nwb_check.trials["block"].data[:])
     lfp_shape = nwb_check.processing["ecephys"]["LFP"]["LFP"].data.shape
 
+    # Verify every unit's electrode reference falls within [0, n_el)
+    elec_refs = [nwb_check.units["electrodes"][i][0] for i in range(n_u)]
+    bad_refs  = [r for r in elec_refs if not (0 <= r < n_el)]
+
 print(f"\n  Validation report")
 print(f"    Electrodes  : {n_el} channels, {len(regions)} regions")
 print(f"    Units       : {n_u} units, {n_s:,} spikes")
+print(f"    Electrode refs in range : {len(bad_refs) == 0}"
+      + (f"  (BAD: {bad_refs[:5]})" if bad_refs else ""))
 print(f"    Trials      : {n_t} trials, blocks={blocks}")
 print(f"    LFP         : shape={lfp_shape}, "
       f"rate={fs_raw / decimate_factor:.0f} Hz, "
