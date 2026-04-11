@@ -706,7 +706,7 @@ with NWBHDF5IO(output_path, mode="r") as io:
     lfp_shape = nwb_check.processing["ecephys"]["LFP"]["LFP"].data.shape
 
     # Verify every unit's electrode reference falls within [0, n_el)
-    elec_refs = [int(nwb_check.units["electrodes"][i].data[0]) for i in range(n_u)]
+    elec_refs = [int(nwb_check.units["electrodes"][i].index[0]) for i in range(n_u)]
     bad_refs  = [r for r in elec_refs if not (0 <= r < n_el)]
 
 print(f"\n  Validation report")

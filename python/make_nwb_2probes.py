@@ -769,7 +769,7 @@ with NWBHDF5IO(output_path, mode="r") as io:
 
         # Verify units electrode references fall within probe's row range
         elec_refs = [
-            int(nwb_check.units["electrodes"][i].data[0])
+            int(nwb_check.units["electrodes"][i].index[0])
             for i, pl in enumerate(probe_labels_stored) if pl == lbl
         ]
         bad_refs = [r for r in elec_refs if not (rs <= r < re)]
