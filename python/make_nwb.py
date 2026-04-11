@@ -385,17 +385,11 @@ for uid in unit_ids:
 
     # Absolute electrode table row for this unit's peak channel.
     # Single probe -> table starts at row 0, so abs row = SI channel index.
-    peak_electrode_region = nwbfile.create_electrode_table_region(
-        region=[peak_ch_si],
-        description=(
-            f"Peak electrode for unit {uid_int} "
-            f"(electrode table row {peak_ch_si})"
-        ),
-    )
-
+    # add_unit() takes a plain list of row indices for the electrodes argument;
+    # pynwb wraps it into a DynamicTableRegion internally.
     row_kwargs = dict(
         spike_times   = spike_times_s,
-        electrodes    = peak_electrode_region,
+        electrodes    = [peak_ch_si],
         waveform_mean = waveform,
     )
     for si_col, (nwb_col, _) in METRIC_COL_MAP.items():
@@ -712,7 +706,7 @@ with NWBHDF5IO(output_path, mode="r") as io:
     lfp_shape = nwb_check.processing["ecephys"]["LFP"]["LFP"].data.shape
 
     # Verify every unit's electrode reference falls within [0, n_el)
-    elec_refs = [nwb_check.units["electrodes"][i][0] for i in range(n_u)]
+    elec_refs = [int(nwb_check.units["electrodes"][i].data[0]) for i in range(n_u)]
     bad_refs  = [r for r in elec_refs if not (0 <= r < n_el)]
 
 print(f"\n  Validation report")

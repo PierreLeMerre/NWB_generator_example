@@ -493,19 +493,11 @@ for probe_cfg in PROBE_CONFIGS:
         # same order (channel 0 -> row row_start, channel 1 -> row_start+1, ...).
         abs_electrode_row = row_start + peak_ch_si
 
-        # DynamicTableRegion: a single-element region pointing to the
-        # electrode table row of this unit's peak channel
-        peak_electrode_region = nwbfile.create_electrode_table_region(
-            region=[abs_electrode_row],
-            description=(
-                f"Peak electrode for this unit on {label} "
-                f"(absolute electrode table row {abs_electrode_row})"
-            ),
-        )
-
+        # add_unit() takes a plain list of row indices for electrodes;
+        # pynwb wraps it into a DynamicTableRegion internally.
         row_kwargs = dict(
             spike_times            = times_s,
-            electrodes             = peak_electrode_region,
+            electrodes             = [abs_electrode_row],
             probe_label            = label,
             waveform_mean          = waveform,
             quality                = curation_quality.get(uid_int, "unlabelled"),
@@ -777,7 +769,7 @@ with NWBHDF5IO(output_path, mode="r") as io:
 
         # Verify units electrode references fall within probe's row range
         elec_refs = [
-            nwb_check.units["electrodes"][i][0]   # single-element region -> first row
+            int(nwb_check.units["electrodes"][i].data[0])
             for i, pl in enumerate(probe_labels_stored) if pl == lbl
         ]
         bad_refs = [r for r in elec_refs if not (rs <= r < re)]
